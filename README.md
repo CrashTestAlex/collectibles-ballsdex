@@ -11,7 +11,7 @@ Extra collectibles for your dex! Utilizes currency for purchasing collectibles a
    location = "git+https://github.com/CrashTestAlex/collectibles-ballsdex.git"
    path = "collect"
    enabled = true
-   editable = true
+   editable = false
    ```
 2. Rebuild your bot
    ```

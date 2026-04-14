@@ -65,7 +65,7 @@ async def collectibles_give(
         await ctx.send(f"{user.mention} already owns **{collectible.name}**.", ephemeral=True)
         return
     await sync_to_async(PlayerCollectible.objects.create)(player=player, collectible=collectible)
-    await ctx.send(f"✅ Gave **{collectible.name}** to {user.mention}.", ephemeral=True)
+    await ctx.send(f"✅ Gave **{collectible.name}** to {user.mention}. Reload the cache to load the instance.", ephemeral=True)
     log.info(
         f"{ctx.author} ({ctx.author.id}) gave '{collectible.name}' to {user} ({user.id})",
         extra={"webhook": True},
@@ -87,7 +87,7 @@ async def collectibles_remove(
         await ctx.send(f"{user.mention} does not own **{collectible.name}**.", ephemeral=True)
         return
     await sync_to_async(owned.delete)()
-    await ctx.send(f"🗑️ Removed **{collectible.name}** from {user.mention}.", ephemeral=True)
+    await ctx.send(f"🗑️ Removed **{collectible.name}** from {user.mention}. Reload the cache to update the players data.", ephemeral=True)
     log.info(
         f"{ctx.author} ({ctx.author.id}) removed '{collectible.name}' from {user} ({user.id})",
         extra={"webhook": True},
@@ -100,6 +100,7 @@ async def collectibles_create(
     name: str,
     emoji: str,
     cost: int,
+    image_url: str,
     requirement_type: str | None = None,
     requirement_value: str | None = None,
 ):
@@ -111,10 +112,11 @@ async def collectibles_create(
         name=name,
         emoji=emoji,
         cost=cost,
+        image_url=image_url,
         requirement_type=requirement_type,
         requirement_value=requirement_value,
     )
-    await ctx.send(f"✨ Created **{collectible.name}**.", ephemeral=True)
+    await ctx.send(f"✨ Created **{collectible.name}**. Reload the bot's cache to load the new collectible.\n{collectible.image_url}", ephemeral=True)
     log.info(
         f"{ctx.author} ({ctx.author.id}) created collectible '{collectible.name}'",
         extra={"webhook": True},

@@ -173,9 +173,23 @@ class CollectibleShopView(discord.ui.LayoutView):
         result = await sync_to_async(purchase_collectible)(self.player, collectible)
         await interaction.response.send_message(result, ephemeral=True)
 
-
 # Here is the requirement logic, feel free to add your own requirements for collectibles
 # Note that requirements dont delete anything from the players data
+
+def format_requirement(collectible: Collectible) -> str:
+    match collectible.requirement_type:
+        case "total": # for total balls owned
+            return f"Have {collectible.requirement_value} total balls."
+        case "shiny": # for shiny balls
+            return f"Obtain {collectible.requirement_value} shiny balls."
+        case "ball": # for a singular ball.
+            return f"Catch 1 {collectible.requirement_value}."
+        case "balls": # for a singular ball.
+            return f"Catch {collectible.requirement_value}." # make the value something like "10 kosovo"
+        case "special": # for a special ball
+            return f"Own a {collectible.requirement_value}." # make the value something like "christmas hungary"
+        case _:
+            return "No requirement, just buy!"
 
 async def meets_requirement(player: Player, collectible: Collectible) -> bool:
     match collectible.requirement_type:

@@ -1,5 +1,18 @@
-from django.db import migrations, models
-import django.db.models.deletion
+from django.db import migrations
+
+def create_default_collectible(apps, schema_editor):
+    Collectible = apps.get_model("collect", "Collectible")
+
+    if not Collectible.objects.exists():
+        Collectible.objects.create(
+            name="Test Collectible",
+            emoji="🧿",
+            cost=10,
+            requirement_type=None,
+            requirement_value=None,
+            bio="test 123",
+            image_url="https://dronelife.com/wp-content/uploads/2016/06/test.png",
+        )
 
 class Migration(migrations.Migration):
 
@@ -33,8 +46,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('obtained_at', models.DateTimeField(auto_now_add=True)),
-                ('collectible', models.ForeignKey(on_delete=models.deletion.CASCADE, related_name='owners', to='collect.Collectible')),
-                ('player', models.ForeignKey(on_delete=models.deletion.CASCADE, related_name='collectibles', to='bd_models.player')),
+                ('collectible', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='owners', to='collect.Collectible')),
+                ('player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='collectibles', to='bd_models.player')),
             ],
             options={
                 'db_table': 'playercollectible',
@@ -45,4 +58,5 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
+        migrations.RunPython(create_default_collectible),
     ]

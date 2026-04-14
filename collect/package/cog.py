@@ -26,6 +26,100 @@ def render_emoji(bot: discord.Client, value: str | None) -> str:
         return str(emoji) if emoji else f"<:_: {value}>"
     return value
 
+# Here is the requirement logic, feel free to add your own requirements for collectibles
+# Note that requirements dont delete anything from the players data
+
+def format_requirement(collectible: Collectible) -> str:
+    match collectible.requirement_type:
+        case "total": # for total balls owned
+            return f"Have {collectible.requirement_value} total balls."
+        case "shiny": # for shiny balls
+            return f"Obtain {collectible.requirement_value} shiny balls."
+        case "ball": # for a singular ball.
+            return f"Catch 1 {collectible.requirement_value}."
+        case "balls": # for a singular ball.
+            return f"Catch {collectible.requirement_value}." # make the value something like "10 kosovo"
+        case "special": # for a special ball
+            return f"Own a {collectible.requirement_value}." # make the value something like "christmas hungary"
+        case _:
+            return "No requirement, just buy!"
+
+async def meets_requirement(player: Player, collectible: Collectible) -> bool:
+    match collectible.requirement_type:
+        case "total":
+            count = await sync_to_async(BallInstance.objects.filter(player=player).count)()
+            return count >= int(collectible.requirement_value)
+
+        case "shiny":
+            shiny_count = await sync_to_async(
+                BallInstance.objects.filter(
+                    player=player,
+                    special__name="Shiny"
+                ).count
+            )()
+            return shiny_count >= int(collectible.requirement_value)
+
+        case "ball":
+            return await sync_to_async(
+                BallInstance.objects.filter(
+                    player=player,
+                    ball__country=collectible.requirement_value
+                ).exists
+            )()
+        
+        case "balls":
+            try:
+                amount_str, country = collectible.requirement_value.split(maxsplit=1)
+                amount = int(amount_str)
+            except ValueError:
+                return False
+
+            count = await sync_to_async(
+                BallInstance.objects.filter(
+                    player=player,
+                    ball__country=country
+                ).count
+            )()
+            return count >= amount
+
+        case "special":
+            try:
+                special_name, country = collectible.requirement_value.split(maxsplit=1)
+            except ValueError:
+                return False
+
+            return await sync_to_async(
+                BallInstance.objects.filter(
+                    player=player,
+                    special__name__iexact=special_name,
+                    ball__country__iexact=country
+                ).exists
+            )()
+
+        case _:
+            return True
+
+
+async def purchase_collectible(player: Player, collectible: Collectible) -> str:
+    exists = await sync_to_async(
+        PlayerCollectible.objects.filter(player=player, collectible=collectible).exists
+    )()
+    if exists:
+        return "You already own this collectible!"
+
+    if player.currency < collectible.cost:
+        return f"Not enough currency. You need 🪙**{collectible.cost}**, but you only have 🪙**{player.currency}**."
+
+    if not await meets_requirement(player, collectible):
+        return "You don't meet the requirement for this collectible!"
+
+    player.currency -= collectible.cost
+    await sync_to_async(player.save)()
+
+    await sync_to_async(PlayerCollectible.objects.create)(player=player, collectible=collectible)
+
+    return f"Successfully purchased the **{collectible.name}**!"
+
 class PrevButton(discord.ui.Button):
     def __init__(self):
         super().__init__(style=discord.ButtonStyle.secondary, label="←", custom_id="prev")
@@ -173,100 +267,6 @@ class CollectibleShopView(discord.ui.LayoutView):
         result = await sync_to_async(purchase_collectible)(self.player, collectible)
         await interaction.response.send_message(result, ephemeral=True)
 
-# Here is the requirement logic, feel free to add your own requirements for collectibles
-# Note that requirements dont delete anything from the players data
-
-def format_requirement(collectible: Collectible) -> str:
-    match collectible.requirement_type:
-        case "total": # for total balls owned
-            return f"Have {collectible.requirement_value} total balls."
-        case "shiny": # for shiny balls
-            return f"Obtain {collectible.requirement_value} shiny balls."
-        case "ball": # for a singular ball.
-            return f"Catch 1 {collectible.requirement_value}."
-        case "balls": # for a singular ball.
-            return f"Catch {collectible.requirement_value}." # make the value something like "10 kosovo"
-        case "special": # for a special ball
-            return f"Own a {collectible.requirement_value}." # make the value something like "christmas hungary"
-        case _:
-            return "No requirement, just buy!"
-
-async def meets_requirement(player: Player, collectible: Collectible) -> bool:
-    match collectible.requirement_type:
-        case "total":
-            count = await sync_to_async(BallInstance.objects.filter(player=player).count)()
-            return count >= int(collectible.requirement_value)
-
-        case "shiny":
-            shiny_count = await sync_to_async(
-                BallInstance.objects.filter(
-                    player=player,
-                    special__name="Shiny"
-                ).count
-            )()
-            return shiny_count >= int(collectible.requirement_value)
-
-        case "ball":
-            return await sync_to_async(
-                BallInstance.objects.filter(
-                    player=player,
-                    ball__country=collectible.requirement_value
-                ).exists
-            )()
-        
-        case "balls":
-            try:
-                amount_str, country = collectible.requirement_value.split(maxsplit=1)
-                amount = int(amount_str)
-            except ValueError:
-                return False
-
-            count = await sync_to_async(
-                BallInstance.objects.filter(
-                    player=player,
-                    ball__country=country
-                ).count
-            )()
-            return count >= amount
-
-        case "special":
-            try:
-                special_name, country = collectible.requirement_value.split(maxsplit=1)
-            except ValueError:
-                return False
-
-            return await sync_to_async(
-                BallInstance.objects.filter(
-                    player=player,
-                    special__name__iexact=special_name,
-                    ball__country__iexact=country
-                ).exists
-            )()
-
-        case _:
-            return True
-
-
-async def purchase_collectible(player: Player, collectible: Collectible) -> str:
-    exists = await sync_to_async(
-        PlayerCollectible.objects.filter(player=player, collectible=collectible).exists
-    )()
-    if exists:
-        return "You already own this collectible!"
-
-    if player.currency < collectible.cost:
-        return f"Not enough currency. You need 🪙**{collectible.cost}**, but you only have 🪙**{player.currency}**."
-
-    if not await meets_requirement(player, collectible):
-        return "You don't meet the requirement for this collectible!"
-
-    player.currency -= collectible.cost
-    await sync_to_async(player.save)()
-
-    await sync_to_async(PlayerCollectible.objects.create)(player=player, collectible=collectible)
-
-    return f"Successfully purchased the **{collectible.name}**!"
-
 
 class Collectibles(commands.GroupCog, group_name="collectibles"):
     """View and manage your collectible collection."""
@@ -314,7 +314,7 @@ class Collectibles(commands.GroupCog, group_name="collectibles"):
             discord_id=interaction.user.id
         )
 
-        blocked = await sync_to_async(player.is_blocked)(interaction_player)
+        blocked = await ]player.is_blocked(interaction_player)
         if blocked and not is_staff(interaction):
             await interaction.followup.send(
                 "You cannot view the collectibles of a user who has blocked you.",

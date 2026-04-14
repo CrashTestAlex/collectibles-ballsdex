@@ -27,7 +27,13 @@ class Migration(migrations.Migration):
             name='Collectible',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('requirement_type', models.CharField(blank=True, choices=[('total', 'Total Balls Owned'), ('shiny', 'Shiny Balls Owned'), ('ball', 'Specific Ball (1 required)'), ('balls', 'Specific Ball (X required)'), ('special', 'Special Card Ball')], max_length=50, null=True)),
+                ('requirement_type', models.CharField(blank=True, choices=[
+                    ('total', 'Total Balls Owned'),
+                    ('shiny', 'Shiny Balls Owned'),
+                    ('ball', 'Specific Ball (1 required)'),
+                    ('balls', 'Specific Ball (X required)'),
+                    ('special', 'Special Card Ball')
+                ], max_length=50, null=True)),
                 ('requirement_value', models.CharField(blank=True, max_length=100, null=True)),
                 ('name', models.CharField(max_length=50, unique=True)),
                 ('emoji', models.CharField(max_length=100)),
@@ -46,8 +52,16 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('obtained_at', models.DateTimeField(auto_now_add=True)),
-                ('collectible', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='owners', to='collect.Collectible')),
-                ('player', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='collectibles', to='bd_models.player')),
+                ('collectible', models.ForeignKey(
+                    on_delete=models.deletion.CASCADE,
+                    related_name='owners',
+                    to='collect.Collectible'
+                )),
+                ('player', models.ForeignKey(
+                    on_delete=models.deletion.CASCADE,
+                    related_name='collectibles',
+                    to='bd_models.player'
+                )),
             ],
             options={
                 'db_table': 'playercollectible',

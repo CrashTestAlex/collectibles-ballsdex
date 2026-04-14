@@ -5,13 +5,17 @@
 Extra collectibles for your dex! Utilizes currency for purchasing collectibles and also tracks many things like ball count, shinies and special balls for extra challenges. Players can view all their collectibles in their completion.
 
 ## Installing
-1. Write this inside `config/extra.toml`
+1. Write this inside `config/extra.toml`, You can change the command_group_name to something else if you want a cooler name, or one that matches your dex! (My dex uses "charms")
    ```toml
    [[ballsdex.packages]]
    location = "git+https://github.com/CrashTestAlex/collectibles-ballsdex.git"
    path = "collect"
    enabled = true
    editable = false
+
+   [collectibles]
+   command_group_name = "collectibles"
+
    ```
 2. Rebuild your bot
    ```

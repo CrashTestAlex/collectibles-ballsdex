@@ -14,9 +14,9 @@ readme = "README.md"
 dependencies = []
 
 [project.urls]
-Repository = ""
-Documentation = ""
-Issues = ""
+Repository = "https://github.com/CrashTestAlex/collectibles-ballsdex"
+Documentation = "https://github.com/CrashTestAlex/collectibles-ballsdex#readme"
+Issues = "https://github.com/CrashTestAlex/collectibles-ballsdex/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

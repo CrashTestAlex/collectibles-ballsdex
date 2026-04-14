@@ -314,7 +314,7 @@ class Collectibles(commands.GroupCog, group_name="collectibles"):
             discord_id=interaction.user.id
         )
 
-        blocked = await ]player.is_blocked(interaction_player)
+        blocked = await player.is_blocked(interaction_player)
         if blocked and not is_staff(interaction):
             await interaction.followup.send(
                 "You cannot view the collectibles of a user who has blocked you.",

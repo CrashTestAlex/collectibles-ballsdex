@@ -11,7 +11,9 @@ authors = [
     { name = "crashtestalex" },
 ]
 readme = "README.md"
-dependencies = []
+dependencies = [
+    "asgiref>=3.8.1",
+]
 
 [project.urls]
 Repository = "https://github.com/CrashTestAlex/collectibles-ballsdex"

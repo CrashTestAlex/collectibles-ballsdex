@@ -1,4 +1,4 @@
-from django.db import migrations
+from django.db import migrations, models
 
 def create_default_collectible(apps, schema_editor):
     Collectible = apps.get_model("collect", "Collectible")

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "collectibles"
+version = "1.0.0"
+description = "Collectible items for your BallsDex clone! Must have currency"
+license = "MIT"
+authors = [
+    { name = "crashtestalex" },
+]
+readme = "README.md"
+dependencies = []
+
+[project.urls]
+Repository = ""
+Documentation = ""
+Issues = ""
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["collect*"]

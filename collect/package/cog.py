@@ -6,6 +6,7 @@ from discord import app_commands
 from discord.ext import commands
 from django.core.exceptions import ObjectDoesNotExist
 from asgiref.sync import sync_to_async
+import tomllib
 
 from bd_models.models import Player, Ball, BallInstance
 from collect.models import Collectible, PlayerCollectible
@@ -16,7 +17,16 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("ballsdex.packages.collectibles")
 
-# before u touch anything pls remember to add the currency field in the Player model as its crucial for the store & purchasing feature
+def load_group_name() -> str:
+    try:
+        with open("config/extra.toml", "rb") as f:
+            data = tomllib.load(f)
+            return data.get("collectibles", {}).get("command_group_name", "collectibles")
+    except Exception:
+        return "collectibles"
+
+GROUP_NAME = load_group_name()
+GROUP_NAME_CAP = GROUP_NAME.capitalize()
 
 def render_emoji(bot: discord.Client, value: str | None) -> str:
     if not value:
@@ -26,21 +36,18 @@ def render_emoji(bot: discord.Client, value: str | None) -> str:
         return str(emoji) if emoji else f"<:_: {value}>"
     return value
 
-# Here is the requirement logic, feel free to add your own requirements for collectibles
-# Note that requirements dont delete anything from the players data
-
 def format_requirement(collectible: Collectible) -> str:
     match collectible.requirement_type:
-        case "total": # for total balls owned
+        case "total":
             return f"Have {collectible.requirement_value} total balls."
-        case "shiny": # for shiny balls
+        case "shiny":
             return f"Obtain {collectible.requirement_value} shiny balls."
-        case "ball": # for a singular ball.
+        case "ball":
             return f"Catch 1 {collectible.requirement_value}."
-        case "balls": # for a singular ball.
-            return f"Catch {collectible.requirement_value}." # make the value something like "10 kosovo"
-        case "special": # for a special ball
-            return f"Own a {collectible.requirement_value}." # make the value something like "christmas hungary"
+        case "balls":
+            return f"Catch {collectible.requirement_value}."
+        case "special":
+            return f"Own a {collectible.requirement_value}."
         case _:
             return "No requirement, just buy!"
 
@@ -49,7 +56,6 @@ async def meets_requirement(player: Player, collectible: Collectible) -> bool:
         case "total":
             count = await sync_to_async(BallInstance.objects.filter(player=player).count)()
             return count >= int(collectible.requirement_value)
-
         case "shiny":
             shiny_count = await sync_to_async(
                 BallInstance.objects.filter(
@@ -58,7 +64,6 @@ async def meets_requirement(player: Player, collectible: Collectible) -> bool:
                 ).count
             )()
             return shiny_count >= int(collectible.requirement_value)
-
         case "ball":
             return await sync_to_async(
                 BallInstance.objects.filter(
@@ -66,14 +71,12 @@ async def meets_requirement(player: Player, collectible: Collectible) -> bool:
                     ball__country=collectible.requirement_value
                 ).exists
             )()
-        
         case "balls":
             try:
                 amount_str, country = collectible.requirement_value.split(maxsplit=1)
                 amount = int(amount_str)
             except ValueError:
                 return False
-
             count = await sync_to_async(
                 BallInstance.objects.filter(
                     player=player,
@@ -81,13 +84,11 @@ async def meets_requirement(player: Player, collectible: Collectible) -> bool:
                 ).count
             )()
             return count >= amount
-
         case "special":
             try:
                 special_name, country = collectible.requirement_value.split(maxsplit=1)
             except ValueError:
                 return False
-
             return await sync_to_async(
                 BallInstance.objects.filter(
                     player=player,
@@ -95,29 +96,22 @@ async def meets_requirement(player: Player, collectible: Collectible) -> bool:
                     ball__country__iexact=country
                 ).exists
             )()
-
         case _:
             return True
-
 
 async def purchase_collectible(player: Player, collectible: Collectible) -> str:
     exists = await sync_to_async(
         PlayerCollectible.objects.filter(player=player, collectible=collectible).exists
     )()
     if exists:
-        return "You already own this collectible!"
-
+        return "You already own this item."
     if player.currency < collectible.cost:
         return f"Not enough currency. You need 🪙**{collectible.cost}**, but you only have 🪙**{player.currency}**."
-
     if not await meets_requirement(player, collectible):
-        return "You don't meet the requirement for this collectible!"
-
+        return f"You don't meet the requirement for this {GROUP_NAME[:-1]}."
     player.currency -= collectible.cost
     await sync_to_async(player.save)()
-
     await sync_to_async(PlayerCollectible.objects.create)(player=player, collectible=collectible)
-
     return f"Successfully purchased the **{collectible.name}**!"
 
 class PrevButton(discord.ui.Button):
@@ -128,12 +122,11 @@ class PrevButton(discord.ui.Button):
         view: CollectibleShopView = self.view
         if interaction.user.id != view.player.discord_id:
             await interaction.response.send_message(
-                "You're not allowed to browse someone else's shop!",
+                f"You're not allowed to browse someone else's {GROUP_NAME}.",
                 ephemeral=True
             )
             return
         await view.handle_navigation(interaction, -1)
-
 
 class NextButton(discord.ui.Button):
     def __init__(self):
@@ -143,12 +136,11 @@ class NextButton(discord.ui.Button):
         view: CollectibleShopView = self.view
         if interaction.user.id != view.player.discord_id:
             await interaction.response.send_message(
-                "You're not allowed to browse someone else's shop!",
+                f"You're not allowed to browse someone else's {GROUP_NAME}.",
                 ephemeral=True
             )
             return
         await view.handle_navigation(interaction, 1)
-
 
 class BuyButton(discord.ui.Button):
     def __init__(self):
@@ -163,12 +155,11 @@ class BuyButton(discord.ui.Button):
         view: CollectibleShopView = self.view
         if interaction.user.id != view.player.discord_id:
             await interaction.response.send_message(
-                "You're not allowed to buy collectibles in someone else's shop!",
+                f"You're not allowed to buy {GROUP_NAME} in someone else's shop.",
                 ephemeral=True
             )
             return
         await view.handle_purchase(interaction)
-
 
 class CollectibleSelect(discord.ui.Select):
     def __init__(self, collectibles: List[Collectible], bot: "BallsDexBot"):
@@ -183,9 +174,8 @@ class CollectibleSelect(discord.ui.Select):
                     value=str(idx),
                 )
             )
-
         super().__init__(
-            placeholder="Select a collectible to view...",
+            placeholder=f"Select a {GROUP_NAME[:-1]} to view...",
             min_values=1,
             max_values=1,
             options=options,
@@ -196,14 +186,13 @@ class CollectibleSelect(discord.ui.Select):
         view: CollectibleShopView = self.view
         if interaction.user.id != view.player.discord_id:
             await interaction.response.send_message(
-                "You're not allowed to browse someone else's shop!",
+                f"You're not allowed to browse someone else's {GROUP_NAME}.",
                 ephemeral=True
             )
             return
         view.index = int(self.values[0])
         view.update_layout()
         await interaction.response.edit_message(view=view)
-
 
 class CollectibleShopView(discord.ui.LayoutView):
     def __init__(self, player: Player, collectibles: List[Collectible], bot: "BallsDexBot"):
@@ -226,7 +215,7 @@ class CollectibleShopView(discord.ui.LayoutView):
         requirement_text = format_requirement(collectible)
 
         layout = discord.ui.Container(
-            discord.ui.TextDisplay(content="The Collectible Store!"),
+            discord.ui.TextDisplay(content=f"The {GROUP_NAME_CAP} Store!"),
             discord.ui.TextDisplay(content=header),
             discord.ui.TextDisplay(content=bio_text),
             discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
@@ -267,34 +256,26 @@ class CollectibleShopView(discord.ui.LayoutView):
         result = await sync_to_async(purchase_collectible)(self.player, collectible)
         await interaction.response.send_message(result, ephemeral=True)
 
-
-class Collectibles(commands.GroupCog, group_name="collectibles"):
-    """View and manage your collectible collection."""
-
+class Collectibles(commands.GroupCog, group_name=GROUP_NAME.lower():
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
 
-    @app_commands.command(name="store", description="Browse and purchase collectibles.")
+    @app_commands.command(name="store", description=f"Browse and purchase {GROUP_NAME}.")
     async def store(self, interaction: discord.Interaction):
         await interaction.response.defer()
-
         try:
             player = await sync_to_async(Player.objects.get)(discord_id=interaction.user.id)
         except ObjectDoesNotExist:
             await interaction.followup.send("You don't have any player data yet.", ephemeral=True)
             return
-
         collectibles = await sync_to_async(list)(
             Collectible.objects.all().order_by("id")
         )
-
         view = CollectibleShopView(player, collectibles, self.bot)
         message = await interaction.followup.send(view=view)
         view.message = message
 
-# some vars might say "charm" instead of "collectible" cuz i ripped this from my own bot sorry
-
-    @app_commands.command(name="completion", description="Show your current collectible completion.")
+    @app_commands.command(name="completion", description=f"Show your current {GROUP_NAME} completion.")
     @app_commands.checks.cooldown(1, 20, key=lambda i: i.user.id)
     async def completion(
         self,
@@ -303,85 +284,73 @@ class Collectibles(commands.GroupCog, group_name="collectibles"):
     ):
         user_obj = user or interaction.user
         await interaction.response.defer(thinking=True)
-
         try:
             player = await sync_to_async(Player.objects.get)(discord_id=user_obj.id)
         except ObjectDoesNotExist:
-            await interaction.followup.send(f"{user_obj.name} doesn't own any collectibles yet.")
+            await interaction.followup.send(f"{user_obj.name} doesn't own any {GROUP_NAME}.")
             return
-
         interaction_player, _ = await sync_to_async(Player.objects.get_or_create)(
             discord_id=interaction.user.id
         )
-
         blocked = await player.is_blocked(interaction_player)
         if blocked and not is_staff(interaction):
             await interaction.followup.send(
-                "You cannot view the collectibles of a user who has blocked you.",
+                f"You cannot view the {GROUP_NAME} of a user who has blocked you.",
                 ephemeral=True
             )
             return
-
         if inventory_privacy(self.bot, interaction, player, user_obj) is False:
             return
-
-        all_charms = await sync_to_async(list)(
+        all_items = await sync_to_async(list)(
             Collectible.objects.all().order_by("id")
         )
-        all_charms_by_id = {c.id: c for c in all_charms if c.emoji}
-
+        all_items_by_id = {c.id: c for c in all_items if c.emoji}
         owned_ids = set(
             await sync_to_async(list)(
                 PlayerCollectible.objects.filter(player=player)
                 .values_list("collectible_id", flat=True)
             )
         )
-
         entries: list[tuple[str, str]] = []
 
-        def fill_fields(title: str, charm_ids: set[int]):
-            first_field_added = False
+        def fill_fields(title: str, ids: set[int]):
+            first = False
             buffer = ""
-
-            for cid in sorted(charm_ids):
-                charm = all_charms_by_id.get(cid)
-                if not charm:
+            for cid in sorted(ids):
+                item = all_items_by_id.get(cid)
+                if not item:
                     continue
-
-                emoji_str = render_emoji(self.bot, charm.emoji)
-
+                emoji_str = render_emoji(self.bot, item.emoji)
                 if len(buffer) + len(emoji_str) > 1024:
-                    if first_field_added:
+                    if first:
                         entries.append(("\u200b", buffer))
                     else:
                         entries.append((f"__**{title}**__", buffer))
-                        first_field_added = True
+                        first = True
                     buffer = ""
-
                 buffer += emoji_str + " "
-
             if buffer:
-                if first_field_added:
+                if first:
                     entries.append(("\u200b", buffer))
                 else:
                     entries.append((f"__**{title}**__", buffer))
 
         if owned_ids:
-            fill_fields("Owned Collectibles", owned_ids)
+            fill_fields(f"Owned {GROUP_NAME_CAP}", owned_ids)
         else:
-            entries.append(("__**Owned Collectibles**__", "Nothing yet."))
+            entries.append((f"__**Owned {GROUP_NAME_CAP}**__", "Nothing yet."))
 
-        missing_ids = set(all_charms_by_id.keys()) - owned_ids
+        missing_ids = set(all_items_by_id.keys()) - owned_ids
         if missing_ids:
-            fill_fields("Missing Collectibles", missing_ids)
+            fill_fields(f"Missing {GROUP_NAME_CAP}", missing_ids)
         else:
-            entries.append(("__**:tada: No missing collectibles! :tada:**__", "\u200b"))
+            entries.append((f"__**:tada: No missing {GROUP_NAME}! :tada:**__", "\u200b"))
 
-        completion_percent = round(len(owned_ids) / len(all_charms_by_id) * 100, 1)
+        completion_percent = round(len(owned_ids) / len(all_items_by_id) * 100, 1)
 
         embed = discord.Embed(
-            title=f"{user_obj.display_name}'s Collectible Completion",
-            description=f"Progress: **{completion_percent}% ({len(owned_ids)}/{len(all_charms_by_id)})**",
+            title=f"{user_obj.display_name}'s {GROUP_NAME_CAP} Completion",
+            description=f"Progress: **{completion_percent}% ({len(owned_ids)}/{len(all_items_by_id)})**",
             color=discord.Color.blurple()
         )
         embed.set_author(name=user_obj.display_name, icon_url=user_obj.display_avatar.url)
@@ -390,5 +359,6 @@ class Collectibles(commands.GroupCog, group_name="collectibles"):
             embed.add_field(name=name, value=value, inline=False)
 
         await interaction.followup.send(embed=embed)
+
 
 

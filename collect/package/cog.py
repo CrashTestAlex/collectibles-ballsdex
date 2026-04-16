@@ -256,7 +256,7 @@ class CollectibleShopView(discord.ui.LayoutView):
         result = await sync_to_async(purchase_collectible)(self.player, collectible)
         await interaction.response.send_message(result, ephemeral=True)
 
-class Collectibles(commands.GroupCog, group_name=GROUP_NAME.lower():
+class Collectibles(commands.GroupCog, group_name=GROUP_NAME.lower()):
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
 

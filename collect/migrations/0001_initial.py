@@ -1,4 +1,6 @@
 from django.db import migrations, models
+from django.core.exceptions import ValidationError
+
 
 def create_default_collectible(apps, schema_editor):
     Collectible = apps.get_model("collect", "Collectible")
@@ -14,6 +16,17 @@ def create_default_collectible(apps, schema_editor):
             image_url="https://dronelife.com/wp-content/uploads/2016/06/test.png",
         )
 
+
+def create_default_group_name(apps, schema_editor):
+    GroupName = apps.get_model("collect", "GroupName")
+
+    if not GroupName.objects.exists():
+        GroupName.objects.create(
+            group_name="collectible",
+            plural="collectibles",
+        )
+
+
 class Migration(migrations.Migration):
 
     initial = True
@@ -27,13 +40,18 @@ class Migration(migrations.Migration):
             name='Collectible',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('requirement_type', models.CharField(blank=True, choices=[
-                    ('total', 'Total Balls Owned'),
-                    ('shiny', 'Shiny Balls Owned'),
-                    ('ball', 'Specific Ball (1 required)'),
-                    ('balls', 'Specific Ball (X required)'),
-                    ('special', 'Special Card Ball')
-                ], max_length=50, null=True)),
+                ('requirement_type', models.CharField(
+                    blank=True,
+                    choices=[
+                        ('total', 'Total Balls Owned'),
+                        ('shiny', 'Shiny Balls Owned'),
+                        ('ball', 'Specific Ball (1 required)'),
+                        ('balls', 'Specific Ball (X required)'),
+                        ('special', 'Special Card Ball')
+                    ],
+                    max_length=50,
+                    null=True
+                )),
                 ('requirement_value', models.CharField(blank=True, max_length=100, null=True)),
                 ('name', models.CharField(max_length=50, unique=True)),
                 ('emoji', models.CharField(max_length=100)),
@@ -47,6 +65,7 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'Collectibles',
             },
         ),
+
         migrations.CreateModel(
             name='PlayerCollectible',
             fields=[
@@ -72,5 +91,27 @@ class Migration(migrations.Migration):
                 ],
             },
         ),
+
+        migrations.CreateModel(
+            name='GroupName',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('group_name', models.CharField(
+                    default='collectible',
+                    max_length=20,
+                )),
+                ('plural', models.CharField(
+                    default='collectibles',
+                    max_length=21,
+                )),
+            ],
+            options={
+                'db_table': 'groupname',
+                'verbose_name': 'Group Name',
+                'verbose_name_plural': 'Group Name',
+            },
+        ),
+
         migrations.RunPython(create_default_collectible),
+        migrations.RunPython(create_default_group_name),
     ]

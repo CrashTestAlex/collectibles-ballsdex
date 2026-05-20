@@ -1,4 +1,31 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+
+class GroupName(models.Model):
+    group_name = models.CharField(
+        max_length=20,
+        default="collectible",
+    )
+
+    plural = models.CharField(
+        max_length=21,
+        default="collectibles",
+    )
+
+    def clean(self):
+        if not self.pk and GroupName.objects.exists():
+            raise ValidationError("Only one GroupName can be created.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = "Group Name"
+        verbose_name_plural = "Group Name"
+
+    def __str__(self):
+        return self.group_name
 
 class Collectible(models.Model):
     REQUIREMENT_TYPES = [

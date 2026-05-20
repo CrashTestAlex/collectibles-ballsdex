@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from asgiref.sync import sync_to_async
 import tomllib
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("ballsdex.packages.admin.collectibles")
 
+
 def load_group_name() -> str:
     try:
         with open("config/extra.toml", "rb") as f:
@@ -25,8 +27,10 @@ def load_group_name() -> str:
     except Exception:
         return "collectibles"
 
+
 GROUP_NAME = load_group_name()
 GROUP_NAME_CAP = GROUP_NAME.capitalize()
+
 
 class CollectibleConverter(commands.Converter):
     async def convert(self, ctx: commands.Context, value: str) -> Collectible:
@@ -34,90 +38,168 @@ class CollectibleConverter(commands.Converter):
             return await sync_to_async(Collectible.objects.get)(pk=int(value))
         except Exception:
             pass
+
         try:
             return await sync_to_async(Collectible.objects.get)(name__iexact=value)
         except Exception:
             pass
+
         result = await sync_to_async(
             lambda: Collectible.objects.filter(name__icontains=value).first()
         )()
+
         if result is None:
             raise commands.BadArgument(f'{GROUP_NAME_CAP[:-1]} "{value}" not found.')
+
         return result
 
-@commands.hybrid_group(name=GROUP_NAME.lower())
-@checks.is_staff()
-async def collectibles(ctx: commands.Context["BallsDexBot"]):
-    await ctx.send_help(ctx.command)
 
-@collectibles.command(name="give")
-@checks.is_staff()
-async def collectibles_give(
-    ctx: commands.Context["BallsDexBot"],
-    user: discord.User,
-    collectible: CollectibleConverter,
-):
-    player, _ = await sync_to_async(Player.objects.get_or_create)(discord_id=user.id)
-    exists = await sync_to_async(
-        PlayerCollectible.objects.filter(player=player, collectible=collectible).exists
-    )()
-    if exists:
-        await ctx.send(f"{user.mention} already owns **{collectible.name}**.", ephemeral=True)
-        return
-    await sync_to_async(PlayerCollectible.objects.create)(player=player, collectible=collectible)
-    await ctx.send(f"✅ Gave **{collectible.name}** to {user.mention}. Reload the cache to load the instance.", ephemeral=True)
-    log.info(
-        f"{ctx.author} ({ctx.author.id}) gave '{collectible.name}' to {user} ({user.id})",
-        extra={"webhook": True},
+class Collectibles(commands.Cog):
+    def __init__(self, bot: "BallsDexBot"):
+        self.bot = bot
+
+    collectibles = app_commands.Group(
+        name=GROUP_NAME.lower(),
+        description=f"{GROUP_NAME_CAP} management commands",
     )
 
-@collectibles.command(name="remove")
-@checks.is_staff()
-async def collectibles_remove(
-    ctx: commands.Context["BallsDexBot"],
-    user: discord.User,
-    collectible: CollectibleConverter,
-):
-    try:
-        player = await sync_to_async(Player.objects.get)(discord_id=user.id)
-        owned = await sync_to_async(PlayerCollectible.objects.get)(
-            player=player, collectible=collectible
+    @collectibles.command(name="give")
+    @checks.is_staff()
+    async def collectibles_give(
+        self,
+        interaction: discord.Interaction,
+        user: discord.User,
+        collectible: str,
+    ):
+        ctx = await commands.Context.from_interaction(interaction)
+
+        try:
+            collectible_obj = await CollectibleConverter().convert(ctx, collectible)
+        except commands.BadArgument as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        player, _ = await sync_to_async(Player.objects.get_or_create)(
+            discord_id=user.id
         )
-    except Exception:
-        await ctx.send(f"{user.mention} does not own **{collectible.name}**.", ephemeral=True)
-        return
-    await sync_to_async(owned.delete)()
-    await ctx.send(f"🗑️ Removed **{collectible.name}** from {user.mention}. Reload the cache to update the players data.", ephemeral=True)
-    log.info(
-        f"{ctx.author} ({ctx.author.id}) removed '{collectible.name}' from {user} ({user.id})",
-        extra={"webhook": True},
-    )
 
-@collectibles.command(name="create")
-@checks.is_staff()
-async def collectibles_create(
-    ctx: commands.Context["BallsDexBot"],
-    name: str,
-    emoji: str,
-    cost: int,
-    image_url: str,
-    requirement_type: str | None = None,
-    requirement_value: str | None = None,
-):
-    exists = await sync_to_async(Collectible.objects.filter(name__iexact=name).exists)()
-    if exists:
-        await ctx.send(f"A {GROUP_NAME[:-1]} with that name already exists.", ephemeral=True)
-        return
-    collectible = await sync_to_async(Collectible.objects.create)(
-        name=name,
-        emoji=emoji,
-        cost=cost,
-        image_url=image_url,
-        requirement_type=requirement_type,
-        requirement_value=requirement_value,
-    )
-    await ctx.send(f"✨ Created **{collectible.name}**. Reload the bot's cache to load the new collectible.\n{collectible.image_url}", ephemeral=True)
-    log.info(
-        f"{ctx.author} ({ctx.author.id}) created collectible '{collectible.name}'",
-        extra={"webhook": True},
-    )
+        exists = await sync_to_async(
+            PlayerCollectible.objects.filter(
+                player=player,
+                collectible=collectible_obj,
+            ).exists
+        )()
+
+        if exists:
+            await interaction.response.send_message(
+                f"{user.mention} already owns **{collectible_obj.name}**.",
+                ephemeral=True,
+            )
+            return
+
+        await sync_to_async(PlayerCollectible.objects.create)(
+            player=player,
+            collectible=collectible_obj,
+        )
+
+        await interaction.response.send_message(
+            f"✅ Gave **{collectible_obj.name}** to {user.mention}. "
+            f"Reload the cache to load the instance.",
+            ephemeral=True,
+        )
+
+        log.info(
+            f"{interaction.user} ({interaction.user.id}) gave "
+            f"'{collectible_obj.name}' to {user} ({user.id})",
+            extra={"webhook": True},
+        )
+
+    @collectibles.command(name="remove")
+    @checks.is_staff()
+    async def collectibles_remove(
+        self,
+        interaction: discord.Interaction,
+        user: discord.User,
+        collectible: str,
+    ):
+        ctx = await commands.Context.from_interaction(interaction)
+
+        try:
+            collectible_obj = await CollectibleConverter().convert(ctx, collectible)
+        except commands.BadArgument as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        try:
+            player = await sync_to_async(Player.objects.get)(discord_id=user.id)
+
+            owned = await sync_to_async(PlayerCollectible.objects.get)(
+                player=player,
+                collectible=collectible_obj,
+            )
+
+        except Exception:
+            await interaction.response.send_message(
+                f"{user.mention} does not own **{collectible_obj.name}**.",
+                ephemeral=True,
+            )
+            return
+
+        await sync_to_async(owned.delete)()
+
+        await interaction.response.send_message(
+            f"Removed **{collectible_obj.name}** from {user.mention}. "
+            f"Reload the cache to update the players data.",
+            ephemeral=True,
+        )
+
+        log.info(
+            f"{interaction.user} ({interaction.user.id}) removed "
+            f"'{collectible_obj.name}' from {user} ({user.id})",
+            extra={"webhook": True},
+        )
+
+    @collectibles.command(name="create")
+    @checks.is_staff()
+    async def collectibles_create(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        emoji: str,
+        cost: int,
+        image_url: str,
+        requirement_type: str | None = None,
+        requirement_value: str | None = None,
+    ):
+        exists = await sync_to_async(
+            Collectible.objects.filter(name__iexact=name).exists
+        )()
+
+        if exists:
+            await interaction.response.send_message(
+                f"A {GROUP_NAME[:-1]} with that name already exists.",
+                ephemeral=True,
+            )
+            return
+
+        collectible = await sync_to_async(Collectible.objects.create)(
+            name=name,
+            emoji=emoji,
+            cost=cost,
+            image_url=image_url,
+            requirement_type=requirement_type,
+            requirement_value=requirement_value,
+        )
+
+        await interaction.response.send_message(
+            f"Created **{collectible.name}**.\n"
+            f"Reload the bot's cache to load the new collectible.\n"
+            f"{collectible.image_url}",
+            ephemeral=True,
+        )
+
+        log.info(
+            f"{interaction.user} ({interaction.user.id}) created "
+            f"collectible '{collectible.name}'",
+            extra={"webhook": True},
+        )

@@ -17,16 +17,11 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("ballsdex.packages.collectibles")
 
-def load_group_name() -> str:
-    try:
-        with open("config/extra.toml", "rb") as f:
-            data = tomllib.load(f)
-            return data.get("collectibles", {}).get("command_group_name", "collectibles")
-    except Exception:
-        return "collectibles"
+GROUP_MODEL = async_to_sync(GroupName.objects.aget)(pk=1)
 
-GROUP_NAME = load_group_name()
+GROUP_NAME = GROUP_MODEL.group_name
 GROUP_NAME_CAP = GROUP_NAME.capitalize()
+plural = GROUP_MODEL.plural
 
 def render_emoji(bot: discord.Client, value: str | None) -> str:
     if not value:
@@ -155,7 +150,7 @@ class BuyButton(discord.ui.Button):
         view: CollectibleShopView = self.view
         if interaction.user.id != view.player.discord_id:
             await interaction.response.send_message(
-                f"You're not allowed to buy {GROUP_NAME} in someone else's shop.",
+                f"You're not allowed to buy {GROUP_MODEL.plural} in someone else's shop.",
                 ephemeral=True
             )
             return
@@ -256,11 +251,13 @@ class CollectibleShopView(discord.ui.LayoutView):
         result = await sync_to_async(purchase_collectible)(self.player, collectible)
         await interaction.response.send_message(result, ephemeral=True)
 
-class Collectibles(commands.GroupCog, group_name=GROUP_NAME.lower()):
+plural = GROUP_MODEL.plural
+
+class Collectibles(commands.GroupCog, group_name=plural.lower()):
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
 
-    @app_commands.command(name="store", description=f"Browse and purchase {GROUP_NAME}.")
+    @app_commands.command(name="store", description=f"Browse and purchase {plural}.")
     async def store(self, interaction: discord.Interaction):
         await interaction.response.defer()
         try:
@@ -287,7 +284,7 @@ class Collectibles(commands.GroupCog, group_name=GROUP_NAME.lower()):
         try:
             player = await sync_to_async(Player.objects.get)(discord_id=user_obj.id)
         except ObjectDoesNotExist:
-            await interaction.followup.send(f"{user_obj.name} doesn't own any {GROUP_NAME}.")
+            await interaction.followup.send(f"{user_obj.name} doesn't own any {plural}.")
             return
         interaction_player, _ = await sync_to_async(Player.objects.get_or_create)(
             discord_id=interaction.user.id
@@ -295,7 +292,7 @@ class Collectibles(commands.GroupCog, group_name=GROUP_NAME.lower()):
         blocked = await player.is_blocked(interaction_player)
         if blocked and not is_staff(interaction):
             await interaction.followup.send(
-                f"You cannot view the {GROUP_NAME} of a user who has blocked you.",
+                f"You cannot view the {plural} of a user who has blocked you.",
                 ephemeral=True
             )
             return

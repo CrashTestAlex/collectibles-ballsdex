@@ -5,7 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from django.core.exceptions import ObjectDoesNotExist
-from asgiref.sync import sync_to_async
+from asgiref.sync import sync_to_async, async_to_sync
 import tomllib
 
 from bd_models.models import Player, Ball, BallInstance

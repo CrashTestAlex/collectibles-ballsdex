@@ -70,7 +70,7 @@ class Collectibles(commands.Cog):
 
         self.collectibles.name = plural.lower()
         self.collectibles.description = f"{GROUP_NAME_CAP} management commands"
-]
+
     collectibles = app_commands.Group(
         name="collectibles",
         description="Collectible management commands",

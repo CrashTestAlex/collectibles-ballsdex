@@ -44,14 +44,11 @@ class CollectibleConverter:
 class CollectAdmin(commands.Cog):
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
-        self.group_model = None
-        self.collectibles = app_commands.Group(
-            name="collectibles",
-            description="Collectible management commands",
-        )
+        self.group_model: GroupName | None = None
 
     async def cog_load(self):
         global GROUP_NAME, GROUP_NAME_CAP, plural
+
         try:
             self.group_model = await GroupName.objects.aget(pk=1)
         except GroupName.DoesNotExist:
@@ -59,13 +56,21 @@ class CollectAdmin(commands.Cog):
                 group_name="collectible",
                 plural="collectibles",
             )
+
         GROUP_NAME = self.group_model.group_name
         GROUP_NAME_CAP = GROUP_NAME.capitalize()
         plural = self.group_model.plural
-        self.collectibles.name = plural.lower()
-        self.collectibles.description = f"{GROUP_NAME_CAP} management commands"
 
-    @self.collectibles.command(name="give")
+        type(self).collectibles.name = plural.lower()
+        type(self).collectibles.description = f"{GROUP_NAME_CAP} management commands"
+        self.bot.tree.add_command(type(self).collectibles)
+
+    collectibles = app_commands.Group(
+        name="collectibles",
+        description="Collectible management commands",
+    )
+
+    @collectibles.command(name="give")
     @checks.is_staff()
     async def collectibles_give(
         self,
@@ -79,33 +84,40 @@ class CollectAdmin(commands.Cog):
         except ValueError as e:
             await interaction.followup.send(str(e))
             return
+
         player, _ = await sync_to_async(Player.objects.get_or_create)(
             discord_id=user.id
         )
+
         exists = await sync_to_async(
             PlayerCollectible.objects.filter(
                 player=player,
                 collectible=collectible_obj,
             ).exists
         )()
+
         if exists:
             await interaction.followup.send(
                 f"{user.mention} already owns **{collectible_obj.name}**."
             )
             return
+
         await sync_to_async(PlayerCollectible.objects.create)(
             player=player,
             collectible=collectible_obj,
         )
+
         await interaction.followup.send(
             f"Gave **{collectible_obj.name}** to {user.mention}. Reload the cache."
         )
+
         log.info(
-            f"{interaction.user} ({interaction.user.id}) gave '{collectible_obj.name}' to {user} ({user.id})",
+            f"{interaction.user} ({interaction.user.id}) gave "
+            f"'{collectible_obj.name}' to {user} ({user.id})",
             extra={"webhook": True},
         )
 
-    @self.collectibles.command(name="remove")
+    @collectibles.command(name="remove")
     @checks.is_staff()
     async def collectibles_remove(
         self,
@@ -119,6 +131,7 @@ class CollectAdmin(commands.Cog):
         except ValueError as e:
             await interaction.followup.send(str(e))
             return
+
         try:
             player = await sync_to_async(Player.objects.get)(discord_id=user.id)
             owned = await sync_to_async(PlayerCollectible.objects.get)(
@@ -130,16 +143,20 @@ class CollectAdmin(commands.Cog):
                 f"{user.mention} does not own **{collectible_obj.name}**."
             )
             return
+
         await sync_to_async(owned.delete)()
+
         await interaction.followup.send(
             f"Removed **{collectible_obj.name}** from {user.mention}. Reload the cache."
         )
+
         log.info(
-            f"{interaction.user} ({interaction.user.id}) removed '{collectible_obj.name}' from {user} ({user.id})",
+            f"{interaction.user} ({interaction.user.id}) removed "
+            f"'{collectible_obj.name}' from {user} ({user.id})",
             extra={"webhook": True},
         )
 
-    @self.collectibles.command(name="create")
+    @collectibles.command(name="create")
     @checks.is_staff()
     async def collectibles_create(
         self,
@@ -152,14 +169,17 @@ class CollectAdmin(commands.Cog):
         requirement_value: str | None = None,
     ):
         await interaction.response.defer(ephemeral=True)
+
         exists = await sync_to_async(
             Collectible.objects.filter(name__iexact=name).exists
         )()
+
         if exists:
             await interaction.followup.send(
                 f"A {GROUP_NAME[:-1]} with that name already exists."
             )
             return
+
         collectible = await sync_to_async(Collectible.objects.create)(
             name=name,
             emoji=emoji,
@@ -168,10 +188,15 @@ class CollectAdmin(commands.Cog):
             requirement_type=requirement_type,
             requirement_value=requirement_value,
         )
+
         await interaction.followup.send(
-            f"Created **{collectible.name}**.\nReload the bot's cache.\n{collectible.image_url}"
+            f"Created **{collectible.name}**.\n"
+            f"Reload the bot's cache.\n"
+            f"{collectible.image_url}"
         )
+
         log.info(
-            f"{interaction.user} ({interaction.user.id}) created collectible '{collectible.name}'",
+            f"{interaction.user} ({interaction.user.id}) created "
+            f"collectible '{collectible.name}'",
             extra={"webhook": True},
         )

@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 from discord.ext import commands
-from asgiref.sync import sync_to_async, async_to_sync
-import tomllib
+from asgiref.sync import sync_to_async
 
 from ballsdex.core.utils import checks
 from bd_models.models import Player
@@ -18,11 +17,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("ballsdex.packages.admin.collectibles")
 
-GROUP_MODEL = async_to_sync(GroupName.objects.aget)(pk=1)
-
-GROUP_NAME = GROUP_MODEL.group_name
+GROUP_NAME = "collectible"
 GROUP_NAME_CAP = GROUP_NAME.capitalize()
-plural = GROUP_MODEL.plural
+plural = "collectibles"
+
 
 class CollectibleConverter(commands.Converter):
     async def convert(self, ctx: commands.Context, value: str) -> Collectible:
@@ -49,10 +47,33 @@ class CollectibleConverter(commands.Converter):
 class Collectibles(commands.Cog):
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
+        self.group_model: GroupName | None = None
 
+    async def cog_load(self):
+        """
+        Load GroupName dynamically and update global naming.
+        This avoids all import‑time DB access.
+        """
+        global GROUP_NAME, GROUP_NAME_CAP, plural
+
+        try:
+            self.group_model = await GroupName.objects.aget(pk=1)
+        except GroupName.DoesNotExist:
+            self.group_model = await GroupName.objects.acreate(
+                group_name="collectible",
+                plural="collectibles",
+            )
+
+        GROUP_NAME = self.group_model.group_name
+        GROUP_NAME_CAP = GROUP_NAME.capitalize()
+        plural = self.group_model.plural
+
+        self.collectibles.name = plural.lower()
+        self.collectibles.description = f"{GROUP_NAME_CAP} management commands"
+]
     collectibles = app_commands.Group(
-        name=GROUP_NAME.lower(),
-        description=f"{GROUP_NAME_CAP} management commands",
+        name="collectibles",
+        description="Collectible management commands",
     )
 
     @collectibles.command(name="give")
@@ -124,12 +145,10 @@ class Collectibles(commands.Cog):
 
         try:
             player = await sync_to_async(Player.objects.get)(discord_id=user.id)
-
             owned = await sync_to_async(PlayerCollectible.objects.get)(
                 player=player,
                 collectible=collectible_obj,
             )
-
         except Exception:
             await interaction.response.send_message(
                 f"{user.mention} does not own **{collectible_obj.name}**.",
@@ -185,7 +204,7 @@ class Collectibles(commands.Cog):
 
         await interaction.response.send_message(
             f"Created **{collectible.name}**.\n"
-            f"Reload the bot's cache to load the new collectible.\n"
+            f"Reload the bot's cache to load the new {GROUP_NAME}.\n"
             f"{collectible.image_url}",
             ephemeral=True,
         )

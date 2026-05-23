@@ -63,7 +63,6 @@ class CollectAdmin(commands.Cog):
 
         type(self).collectibles.name = plural.lower()
         type(self).collectibles.description = f"{GROUP_NAME_CAP} management commands"
-        self.bot.tree.add_command(type(self).collectibles)
 
     collectibles = app_commands.Group(
         name="collectibles",

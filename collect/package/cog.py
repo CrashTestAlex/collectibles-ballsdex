@@ -109,14 +109,14 @@ async def purchase_collectible(player: Player, collectible: Collectible) -> str:
     )()
     if exists:
         return "You already own this item."
-    if player.currency < collectible.cost:
+    if player.money < collectible.cost:
         return (
-            f"Not enough currency. You need 🪙**{collectible.cost}**, "
-            f"but you only have 🪙**{player.currency}**."
+            f"Not enough money. You need 🪙**{collectible.cost}**, "
+            f"but you only have 🪙**{player.money}**."
         )
     if not await meets_requirement(player, collectible):
         return f"You don't meet the requirement for this {GROUP_NAME[:-1]}."
-    player.currency -= collectible.cost
+    player.money -= collectible.cost
     await sync_to_async(player.save)()
     await sync_to_async(PlayerCollectible.objects.create)(
         player=player,

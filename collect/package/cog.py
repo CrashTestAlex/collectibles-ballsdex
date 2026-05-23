@@ -302,10 +302,7 @@ class Collectibles(commands.Cog):
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
         self.group_model: GroupName | None = None
-        self.group = app_commands.Group(
-            name=f"{GROUP_NAME.lower()}",
-            description=f"{GROUP_NAME} commands",
-        )
+        self.group = None
         self.bot.currency_cache = ("Currency", "Currencies", "")
 
     async def cog_load(self):
@@ -323,8 +320,10 @@ class Collectibles(commands.Cog):
         GROUP_NAME_CAP = GROUP_NAME.capitalize()
         plural = self.group_model.plural
 
-        self.group.name = plural.lower()
-        self.group.description = f"{GROUP_NAME_CAP} commands"
+        self.group = app_commands.Group(
+            name=plural.lower(),
+            description=f"{GROUP_NAME_CAP} commands",
+        )
 
         self.bot.currency_cache = await get_currency()
 

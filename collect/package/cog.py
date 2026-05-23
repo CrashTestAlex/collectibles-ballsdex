@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from typing import TYPE_CHECKING, List, Optional
 
@@ -6,10 +8,10 @@ from discord import app_commands
 from discord.ext import commands
 from django.core.exceptions import ObjectDoesNotExist
 from asgiref.sync import sync_to_async
-import tomllib
 
-from bd_models.models import Player, Ball, BallInstance
+from bd_models.models import Player, BallInstance
 from collect.models import Collectible, PlayerCollectible, GroupName
+from settings.models import Settings
 from ballsdex.core.utils.utils import inventory_privacy, is_staff
 
 if TYPE_CHECKING:
@@ -17,9 +19,20 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("ballsdex.packages.collectibles")
 
-GROUP_NAME: str = "collectible"
-GROUP_NAME_CAP: str = GROUP_NAME.capitalize()
-plural: str = "collectibles"
+GROUP_NAME = "collectible"
+GROUP_NAME_CAP = GROUP_NAME.capitalize()
+plural = "collectibles"
+
+
+async def get_currency():
+    settings = await sync_to_async(Settings.objects.first)()
+    if not settings or not settings.currency_name:
+        return ("Currency", "Currencies", "")
+    return (
+        settings.currency_name,
+        settings.currency_plural_name or settings.currency_name + "s",
+        settings.currency_symbol or "",
+    )
 
 
 def render_emoji(bot: discord.Client, value: str | None) -> str:
@@ -101,6 +114,7 @@ async def meets_requirement(player: Player, collectible: Collectible) -> bool:
 
 
 async def purchase_collectible(player: Player, collectible: Collectible) -> str:
+    currency_name, currency_plural, currency_symbol = await get_currency()
     exists = await sync_to_async(
         PlayerCollectible.objects.filter(
             player=player,
@@ -111,8 +125,9 @@ async def purchase_collectible(player: Player, collectible: Collectible) -> str:
         return "You already own this item."
     if player.money < collectible.cost:
         return (
-            f"Not enough money. You need 🪙**{collectible.cost}**, "
-            f"but you only have 🪙**{player.money}**."
+            f"Not enough {currency_name.lower()}. "
+            f"You need {currency_symbol}**{collectible.cost}**, "
+            f"but you only have {currency_symbol}**{player.money}**."
         )
     if not await meets_requirement(player, collectible):
         return f"You don't meet the requirement for this {GROUP_NAME[:-1]}."
@@ -122,7 +137,10 @@ async def purchase_collectible(player: Player, collectible: Collectible) -> str:
         player=player,
         collectible=collectible,
     )
-    return f"Successfully purchased the **{collectible.name}**!"
+    return (
+        f"Successfully purchased the **{collectible.name}** "
+        f"for {currency_symbol}{collectible.cost}!"
+    )
 
 
 class PrevButton(discord.ui.Button):
@@ -189,7 +207,7 @@ class CollectibleSelect(discord.ui.Select):
                 )
             )
         super().__init__(
-            placeholder=f"Select a {GROUP_NAME} to view...",
+            placeholder=f"Select a {GROUP_NAME[:-1]} to view...",
             min_values=1,
             max_values=1,
             options=options,
@@ -228,6 +246,7 @@ class CollectibleShopView(discord.ui.LayoutView):
         self.clear_items()
         collectible = self.collectibles[self.index]
         emoji = render_emoji(self.bot, collectible.emoji)
+        currency_name, currency_plural, currency_symbol = self.bot.currency_cache
 
         header = (
             f"{emoji} **{collectible.name}**"
@@ -239,7 +258,7 @@ class CollectibleShopView(discord.ui.LayoutView):
             if collectible.bio
             else "*No biography available.*"
         )
-        cost_text = f"🪙 **{collectible.cost}**"
+        cost_text = f"{currency_symbol} **{collectible.cost}**"
         requirement_text = format_requirement(collectible)
 
         layout = discord.ui.Container(
@@ -295,10 +314,15 @@ class CollectibleShopView(discord.ui.LayoutView):
         await interaction.response.send_message(result, ephemeral=True)
 
 
-class Collectibles(commands.GroupCog, group_name="collectibles"):
+class Collectibles(commands.Cog):
     def __init__(self, bot: "BallsDexBot"):
         self.bot = bot
         self.group_model: GroupName | None = None
+        self.group = app_commands.Group(
+            name="collectibles",
+            description="Collectible commands",
+        )
+        self.bot.currency_cache = ("Currency", "Currencies", "")
 
     async def cog_load(self):
         global GROUP_NAME, GROUP_NAME_CAP, plural
@@ -315,9 +339,16 @@ class Collectibles(commands.GroupCog, group_name="collectibles"):
         GROUP_NAME_CAP = GROUP_NAME.capitalize()
         plural = self.group_model.plural
 
+        self.group.name = plural.lower()
+        self.group.description = f"{GROUP_NAME_CAP} commands"
+
+        self.bot.tree.add_command(self.group)
+
+        self.bot.currency_cache = await get_currency()
+
     @app_commands.command(
         name="store",
-        description=f"Browse and purchase {plural}.",
+        description="Browse and purchase items.",
     )
     async def store(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -348,7 +379,7 @@ class Collectibles(commands.GroupCog, group_name="collectibles"):
 
     @app_commands.command(
         name="completion",
-        description=f"Show your current {GROUP_NAME} completion.",
+        description="Show your current completion.",
     )
     @app_commands.checks.cooldown(1, 20, key=lambda i: i.user.id)
     async def completion(
